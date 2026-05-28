@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 — 2026-05-28
+
+- **Fix lid-closed reliability:** disable App Nap (`LSAppNapIsDisabled`) and hold a
+  `ProcessInfo` activity while keeping awake, so the heartbeat never goes stale when the
+  lid is closed. Previously App Nap could throttle the polling timer, the clamshell helper
+  would see a stale heartbeat, and the Mac would sleep mid-task on lid close.
+
 ## 1.0.0 — 2026-05-28
 
 First public release.

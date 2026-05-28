@@ -11,6 +11,11 @@ final class SleepController {
     private var systemHeld = false
     private var displayHeld = false
 
+    // Prevents App Nap from throttling our polling timer while we're keeping the
+    // Mac awake — critical with the lid closed, where a napped timer would let the
+    // heartbeat go stale and the clamshell helper would re-enable sleep.
+    private var activity: NSObjectProtocol?
+
     private let reason = "Vigil: AI agent active" as CFString
 
     var isHoldingAwake: Bool { systemHeld }
@@ -20,10 +25,15 @@ final class SleepController {
     func apply(awake: Bool, keepDisplayAwake: Bool) {
         if awake {
             acquireSystem()
+            if activity == nil {
+                activity = ProcessInfo.processInfo.beginActivity(
+                    options: [.userInitiated], reason: "Keeping the Mac awake for AI agents")
+            }
             if keepDisplayAwake { acquireDisplay() } else { releaseDisplay() }
         } else {
             releaseDisplay()
             releaseSystem()
+            if let a = activity { ProcessInfo.processInfo.endActivity(a); activity = nil }
         }
     }
 
