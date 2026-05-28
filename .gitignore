@@ -1,0 +1,13 @@
+# Build output
+build/
+*.dmg
+*.iconset
+
+# macOS
+.DS_Store
+
+# Private business docs (not for the public repo)
+GO-TO-MARKET.md
+KWORK-GIG.md
+DISTRIBUTION.md
+LAUNCH.md

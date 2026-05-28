@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Vigil is NOT sandboxed: it must read other processes (ps/nettop),
+	     manage power assertions, and install a privileged helper. The App
+	     Sandbox would forbid all of these, so Vigil ships via Developer ID +
+	     notarization (direct download / Homebrew), not the Mac App Store.
+
+	     This file is for the Hardened Runtime (required for notarization).
+	     No special exceptions are needed; spawning system tools is allowed. -->
+</dict>
+</plist>

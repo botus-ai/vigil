@@ -1,0 +1,38 @@
+name: release
+
+# Cut a release by pushing a tag, e.g.:  git tag v1.0.0 && git push --tags
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Vigil.app
+        run: bash scripts/build.sh
+
+      - name: Create DMG
+        run: hdiutil create -volname "Vigil" -srcfolder build/Vigil.app -ov -format UDZO build/Vigil.dmg
+
+      # NOTE: This produces an ad-hoc-signed (not notarized) DMG. For a
+      # Gatekeeper-clean download, cut releases locally with
+      # scripts/sign-notarize.sh, or add signing secrets and a notarize step.
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Vigil.dmg
+          generate_release_notes: true
+          body: |
+            ## Vigil ${{ github.ref_name }}
+
+            Keep your Mac awake while your AI agents work — and let it sleep when they don't.
+
+            **Install:** download `Vigil.dmg`, drag Vigil to Applications, launch it.
+            This build is not yet notarized — on first launch, right-click the app → Open.
