@@ -122,6 +122,9 @@ final class StatusMenuController: NSObject {
                 ? (status.lidClosedActive ? "Active · keeping awake (lid ok)" : "Active · keeping awake")
                 : "Idle · sleep allowed"
         }
+        if status.degraded {
+            statusTitleItem.title = "⚠︎ macOS refused the sleep assertion — screen may sleep"
+        }
 
         // Agents line: "X of Y agents working" so leftover idle sessions are clear.
         let snap = status.snapshot
@@ -260,6 +263,13 @@ final class StatusMenuController: NSObject {
         Vigil now lives in your menu bar (the eye icon) and starts at login. It keeps your \
         Mac awake automatically while an AI agent is working, and lets it sleep when they \
         stop — there's nothing to toggle.
+
+        In Automatic mode, Vigil lets the Mac sleep (and lock as usual) a few minutes after \
+        your agents stop — the eye icon shows when it's actively holding awake.
+
+        One thing to know: when you CLOSE the lid, macOS always locks the screen — that's a \
+        security feature Vigil can't (and shouldn't) override. Your agent keeps running; \
+        you'll just see the lock screen when you reopen. That's expected, not a failure.
 
         Want agents to keep running with the lid CLOSED? That needs a one-time administrator \
         approval to install a small helper. (You can also enable this later from the menu.)

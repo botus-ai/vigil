@@ -20,6 +20,11 @@ final class SleepController {
 
     var isHoldingAwake: Bool { systemHeld }
 
+    /// True when we wanted to hold an assertion but the OS refused to grant it —
+    /// a rare failure (resource exhaustion / conflict) that would otherwise let
+    /// the Mac sleep or the screen lock silently. Surfaced in the menu.
+    private(set) var degraded = false
+
     /// Create/release assertions to match the desired awake state.
     /// - keepDisplayAwake: also prevent the display from sleeping.
     func apply(awake: Bool, keepDisplayAwake: Bool) {
@@ -35,6 +40,9 @@ final class SleepController {
             releaseSystem()
             if let a = activity { ProcessInfo.processInfo.endActivity(a); activity = nil }
         }
+        // We "wanted" system sleep prevented whenever awake, and display whenever
+        // keepDisplayAwake. If either wasn't actually granted, we're degraded.
+        degraded = (awake && !systemHeld) || (keepDisplayAwake && !displayHeld)
     }
 
     private func acquireSystem() {
@@ -45,6 +53,7 @@ final class SleepController {
             reason,
             &systemAssertionID)
         systemHeld = (rc == kIOReturnSuccess)
+        if !systemHeld { NSLog("Vigil: system sleep assertion acquire failed (0x%x)", rc) }
     }
 
     private func releaseSystem() {
@@ -62,6 +71,7 @@ final class SleepController {
             reason,
             &displayAssertionID)
         displayHeld = (rc == kIOReturnSuccess)
+        if !displayHeld { NSLog("Vigil: display sleep assertion acquire failed (0x%x)", rc) }
     }
 
     private func releaseDisplay() {
@@ -69,6 +79,21 @@ final class SleepController {
         IOPMAssertionRelease(displayAssertionID)
         displayAssertionID = 0
         displayHeld = false
+    }
+
+    /// Re-create the assertions we believe we're holding. Called on wake from
+    /// sleep, where the previous assertion IDs may no longer be honoured by the
+    /// OS — recreating is idempotent and cheap, and guarantees a still-running
+    /// agent is re-protected immediately rather than trusting a stale local flag.
+    func reacquireIfHolding() {
+        if systemHeld {
+            releaseSystem()   // release the stale ID, then take a fresh one
+            acquireSystem()
+        }
+        if displayHeld {
+            releaseDisplay()
+            acquireDisplay()
+        }
     }
 
     /// Release everything (called on quit).

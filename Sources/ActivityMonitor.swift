@@ -72,14 +72,20 @@ final class ActivityMonitor {
         let prefs = Preferences.shared
         let patterns = prefs.watchPatterns.map { $0.lowercased() }.filter { !$0.isEmpty }
         guard !patterns.isEmpty else { return .empty }
+        let excludes = prefs.watchExcludes.map { $0.lowercased() }.filter { !$0.isEmpty }
 
         // Primary signal for Claude: transcript state. Counts mid-turn sessions.
         let semanticBusy = prefs.semanticDetection ? semantic.busySessionCount() : 0
 
         let procs = readProcesses()
+        // A process is a watched agent if it matches a watch pattern AND is not
+        // excluded. The exclude list keeps "claude"-named background tooling
+        // (vault sync, memory daemons, Vigil's own helper) from being mistaken
+        // for a working agent and pinning the Mac awake.
         let watched = procs.filter { p in
             let c = p.command.lowercased()
-            return patterns.contains { c.contains($0) }
+            guard patterns.contains(where: { c.contains($0) }) else { return false }
+            return !excludes.contains(where: { c.contains($0) })
         }
         guard !watched.isEmpty || semanticBusy > 0 else {
             prevBytesIn = [:]
@@ -180,8 +186,11 @@ final class ActivityMonitor {
     }
 
     /// Returns cumulative bytes_in per PID from a single nettop sample.
+    /// No interface filter: we intentionally include loopback/LAN so agents
+    /// talking to a LOCAL model server (e.g. ollama on 127.0.0.1) still register
+    /// network activity — `-t external` would miss them entirely.
     private func readNetBytesIn() -> [Int: UInt64] {
-        guard let out = run("/usr/bin/nettop", ["-P", "-L", "1", "-x", "-t", "external"]) else { return [:] }
+        guard let out = run("/usr/bin/nettop", ["-P", "-L", "1", "-x"]) else { return [:] }
         var result: [Int: UInt64] = [:]
         var first = true
         out.enumerateLines { line, _ in

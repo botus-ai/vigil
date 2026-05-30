@@ -22,22 +22,34 @@ final class Preferences {
         static let netThreshold = "netThresholdBytesPerSec"
         static let cpuThreshold = "cpuThresholdPercent"
         static let watchPatterns = "watchPatterns"
+        static let watchExcludes = "watchExcludes"
         static let autoCleanRedundant = "autoCleanRedundant"
         static let semanticDetection = "semanticDetection"
         static let didOnboard = "didOnboard"
         static let loginItemUserDisabled = "loginItemUserDisabled"
     }
 
+    /// Substrings that, if present in a process command line, EXCLUDE it from
+    /// being treated as an agent — even if it matches a watch pattern. This stops
+    /// "claude"-named background tooling (vault sync, memory daemons, this app's
+    /// own helper) from being misread as a working agent and pinning the Mac awake.
+    static let defaultExcludes = [
+        "claude-mem", "claude-history", ".claude/statsig", "obsidian",
+        "vault-sync", "vault auto-sync", "chat-auditor", "keep-awake",
+        "vigil", "clamshelld",
+    ]
+
     private init() {
         defaults.register(defaults: [
             Key.mode: OperatingMode.automatic.rawValue,
-            Key.keepDisplayAwake: false,
+            Key.keepDisplayAwake: true,
             Key.lidClosedMode: false,
-            Key.gracePeriod: 120.0,
+            Key.gracePeriod: 300.0,
             Key.pollInterval: 5.0,
             Key.netThreshold: 2048.0,
-            Key.cpuThreshold: 8.0,
+            Key.cpuThreshold: 5.0,
             Key.watchPatterns: ["claude"],
+            Key.watchExcludes: Preferences.defaultExcludes,
             Key.autoCleanRedundant: false,
             Key.semanticDetection: true,
         ])
@@ -92,6 +104,12 @@ final class Preferences {
     var watchPatterns: [String] {
         get { defaults.stringArray(forKey: Key.watchPatterns) ?? ["claude"] }
         set { defaults.set(newValue, forKey: Key.watchPatterns); changed() }
+    }
+
+    /// Substrings that exclude a process from agent detection (see defaultExcludes).
+    var watchExcludes: [String] {
+        get { defaults.stringArray(forKey: Key.watchExcludes) ?? Preferences.defaultExcludes }
+        set { defaults.set(newValue, forKey: Key.watchExcludes); changed() }
     }
 
     func isWatching(_ pattern: String) -> Bool {

@@ -8,6 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu = StatusMenuController(controller: controller)
         controller.start()
 
+        // Re-protect a running agent the instant the Mac wakes from sleep.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(systemDidWake),
+            name: NSWorkspace.didWakeNotification, object: nil)
+
         // Out of the box: start at login unless the user has turned it off.
         if !Preferences.shared.loginItemUserDisabled {
             LaunchAtLogin.set(true)
@@ -18,6 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Preferences.shared.didOnboard = true
             DispatchQueue.main.async { [weak self] in self?.menu?.runOnboarding() }
         }
+    }
+
+    @objc private func systemDidWake() {
+        controller.systemDidWake()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

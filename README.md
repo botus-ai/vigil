@@ -95,15 +95,26 @@ Each agent session is evaluated **individually** (so a crowd of idle/leftover se
 never falsely keep the Mac awake). A session is *working* when any of these is true:
 
 1. **Semantic state (Claude)** — its transcript shows it's mid-turn (`stop_reason != end_turn`).
-2. **API throughput** — sustained network traffic (universal fallback for any tool).
+2. **API throughput** — sustained network traffic, *including loopback* so agents talking to
+   a local model server (e.g. ollama on `127.0.0.1`) count too.
 3. **Subtree CPU** — the process *and its children* are busy (catches long local test/build runs).
 
-Vigil holds an IOKit power assertion while any agent works (lid open), plus a grace period.
+To avoid false positives, `claude`-named background tooling (vault sync, memory daemons,
+Vigil's own helper) is excluded, and detection is debounced so a single CPU blip can't pin
+the Mac awake.
+
+While any agent works, Vigil holds IOKit power assertions for **both** system and display
+sleep (so the screen doesn't lock on you mid-task), plus a grace period after work stops.
 For **lid-closed**, power assertions don't help — macOS sleeps on lid-close regardless — so
 Vigil uses the documented `pmset disablesleep` flag via a small privileged helper. The app
 writes a **heartbeat**; the helper disables lid-close sleep only while that heartbeat is
 fresh, and **automatically restores normal sleep within ~30s** if Vigil ever stops. Your
 Mac can't get stuck awake.
+
+> **About the lock screen:** closing the lid *always* locks the screen — that's a macOS
+> security feature no app can override. Your agent keeps running; you'll just see the lock
+> screen when you reopen. With the lid **open**, Vigil keeps the display on so it won't lock
+> while an agent is working.
 
 ## Privacy
 

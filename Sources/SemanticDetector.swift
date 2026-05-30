@@ -13,7 +13,6 @@ final class SemanticDetector {
         "queue-operation", "attachment", "system",
     ]
     private let recentWindow: TimeInterval = 900   // ignore transcripts older than 15 min
-    private let zombieAge: TimeInterval = 180      // mid-turn but stale 3 min → abandoned
 
     private var projectsDir: URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects")
@@ -46,16 +45,21 @@ final class SemanticDetector {
 
     private func isBusy(_ url: URL, age: TimeInterval) -> Bool {
         guard let obj = lastMeaningfulRecord(url) else { return false }
+        // The caller already filtered to transcripts modified within recentWindow,
+        // so reaching here means the session wrote in the last 15 min. We do NOT
+        // apply a shorter "zombie" cutoff: a long-running tool (a 10-min test, a
+        // slow build, a model thinking) writes a single tool_use/user record and
+        // then goes silent — penalising that with a 3-min cutoff is exactly how a
+        // working agent gets slept. The 15-min window is the single staleness bound.
         switch obj["type"] as? String {
         case "user":
-            // A pending user message or tool_result means the assistant should be
-            // working — unless it's gone stale (crashed/abandoned session).
-            return age <= zombieAge
+            // A pending user message or tool_result → the assistant is working.
+            return true
         case "assistant":
             let msg = obj["message"] as? [String: Any] ?? [:]
-            if msg["stop_reason"] as? String == "end_turn" { return false }
-            // tool_use / max_tokens / pause_turn / null → still working.
-            return age <= zombieAge
+            // end_turn = finished and waiting for the user → idle. Anything else
+            // (tool_use / max_tokens / pause_turn / null) → still working.
+            return (msg["stop_reason"] as? String) != "end_turn"
         default:
             return false
         }

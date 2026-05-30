@@ -12,7 +12,7 @@ final class ClamshellController {
 
     static let label = "app.vigil.clamshelld"
     private static let staleSeconds = 30
-    private static let daemonInterval = 15
+    private static let daemonInterval = 5   // backstop poll; WatchPaths fires sooner
 
     private let fm = FileManager.default
 
