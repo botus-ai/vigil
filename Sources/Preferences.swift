@@ -44,7 +44,7 @@ final class Preferences {
             Key.mode: OperatingMode.automatic.rawValue,
             Key.keepDisplayAwake: true,
             Key.lidClosedMode: false,
-            Key.gracePeriod: 300.0,
+            Key.gracePeriod: 120.0,
             Key.pollInterval: 5.0,
             Key.netThreshold: 2048.0,
             Key.cpuThreshold: 5.0,

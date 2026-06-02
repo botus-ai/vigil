@@ -2,13 +2,16 @@ import Foundation
 
 struct ActivitySnapshot {
     var agentCount: Int          // number of detected agent sessions (root processes)
-    var activeAgentCount: Int    // how many of those are working right now
+    var activeAgentCount: Int    // how many of those are working right now (combined)
+    var semanticBusy: Int        // Claude sessions mid-turn per transcript (reliable signal)
+    var heuristicActive: Int     // sessions over the network/CPU threshold (noisy signal)
     var isActive: Bool           // at least one agent is working right now
     var netBytesPerSec: Double   // throughput of the busiest agent
     var cpuPercent: Double       // CPU% of the busiest agent's subtree
 
-    static let empty = ActivitySnapshot(agentCount: 0, activeAgentCount: 0,
-                                        isActive: false, netBytesPerSec: 0, cpuPercent: 0)
+    static let empty = ActivitySnapshot(agentCount: 0, activeAgentCount: 0, semanticBusy: 0,
+                                        heuristicActive: 0, isActive: false,
+                                        netBytesPerSec: 0, cpuPercent: 0)
 }
 
 /// Polls the system to decide whether any watched AI-agent process is actively
@@ -147,6 +150,8 @@ final class ActivityMonitor {
 
         return ActivitySnapshot(agentCount: totalAgents,
                                 activeAgentCount: activeAgents,
+                                semanticBusy: semanticBusy,
+                                heuristicActive: activeCount,
                                 isActive: activeAgents > 0,
                                 netBytesPerSec: peakRate,
                                 cpuPercent: peakCPU)

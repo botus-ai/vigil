@@ -60,19 +60,23 @@ final class AppController {
 
     private func handle(_ snap: ActivitySnapshot) {
         lastSnapshot = snap
-        if snap.isActive {
+        // The semantic signal (transcript mid-turn) is reliable, so it engages
+        // immediately. The network/CPU heuristic is noisy, so it must persist for
+        // a couple of polls before it counts — that debounce stops a single CPU
+        // blip from a background job arming a long hold (the never-sleeps regression).
+        if snap.heuristicActive > 0 {
             consecutiveActiveTicks += 1
         } else {
             consecutiveActiveTicks = 0
         }
-        if consecutiveActiveTicks >= activateAfterTicks {
-            lastActive = Date()
-        }
+        let working = snap.semanticBusy > 0 || consecutiveActiveTicks >= activateAfterTicks
+        if working { lastActive = Date() }
+        liveActive = working
         evaluate()
     }
 
-    /// Whether an agent is confirmed working right now (after debounce).
-    private var liveActive: Bool { consecutiveActiveTicks >= activateAfterTicks }
+    /// Whether an agent is confirmed working right now.
+    private var liveActive = false
 
     private func evaluate() {
         let prefs = Preferences.shared
@@ -95,7 +99,7 @@ final class AppController {
         let wantDisplay = (prefs.mode == .keepAwake || prefs.keepDisplayAwake) && engaged
 
         if ProcessInfo.processInfo.environment["VIGIL_DEBUG"] != nil {
-            NSLog("VIGIL mode=\(prefs.mode.rawValue) agents=\(lastSnapshot.agentCount) active=\(lastSnapshot.activeAgentCount) isActive=\(lastSnapshot.isActive) ticks=\(consecutiveActiveTicks) engaged=\(engaged) display=\(wantDisplay)")
+            NSLog("VIGIL mode=\(prefs.mode.rawValue) agents=\(lastSnapshot.agentCount) sem=\(lastSnapshot.semanticBusy) heur=\(lastSnapshot.heuristicActive) ticks=\(consecutiveActiveTicks) live=\(liveActive) engaged=\(engaged) display=\(wantDisplay)")
         }
         sleep.apply(awake: engaged, keepDisplayAwake: wantDisplay)
 

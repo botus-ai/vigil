@@ -12,7 +12,7 @@ final class ClamshellController {
 
     static let label = "app.vigil.clamshelld"
     private static let staleSeconds = 30
-    private static let daemonInterval = 5   // backstop poll; WatchPaths fires sooner
+    private static let pollSeconds = 2      // long-running daemon loop interval
 
     private let fm = FileManager.default
 
@@ -28,10 +28,27 @@ final class ClamshellController {
 
     /// Write the heartbeat. `engaged == true` asks the daemon to disable sleep;
     /// the write also refreshes the file's mtime so the daemon sees it as fresh.
+    ///
+    /// IMPORTANT: write IN PLACE (not atomically). An atomic write does temp+rename,
+    /// which replaces the file's inode — and launchd's WatchPaths watches the old
+    /// inode, so it stops firing after the first atomic write, leaving only the
+    /// daemon's slow StartInterval poll. Writing in place keeps the same inode, so
+    /// WatchPaths fires within ~1s of every heartbeat change. Measured: in-place
+    /// write → daemon applies disablesleep in ~0-1s; atomic write → up to 15s.
+    /// That latency is the lid-close race (close the lid before disablesleep=1 and
+    /// the Mac clamshell-sleeps mid-task).
     func heartbeat(engaged: Bool) {
         let dir = (stateFile as NSString).deletingLastPathComponent
         try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        try? (engaged ? "1" : "0").write(toFile: stateFile, atomically: true, encoding: .utf8)
+        let byte = Data(engaged ? [0x31] : [0x30])   // "1" / "0"
+        if let fh = FileHandle(forWritingAtPath: stateFile) {
+            try? fh.truncate(atOffset: 0)
+            try? fh.write(contentsOf: byte)
+            try? fh.close()
+        } else {
+            // File doesn't exist yet — create it (first run / after uninstall).
+            try? byte.write(to: URL(fileURLWithPath: stateFile))
+        }
     }
 
     // MARK: - Install / uninstall (one admin prompt)
@@ -127,21 +144,33 @@ final class ClamshellController {
     private func daemonScript() -> String {
         """
         #!/bin/bash
-        # Vigil clamshell helper. Reads a heartbeat file written by the Vigil app
-        # and toggles `pmset disablesleep`. If the heartbeat is missing or stale,
-        # sleep is re-enabled so the Mac can never get stuck awake.
+        # Vigil clamshell helper (long-running). Polls a heartbeat file written by
+        # the Vigil app every \(Self.pollSeconds)s and toggles `pmset disablesleep`.
+        # A long-running loop is used instead of launchd StartInterval/WatchPaths
+        # because WatchPaths is flaky on atomic writes and StartInterval was too
+        # coarse (15s) — that latency was the lid-close race. This polls reliably.
+        # If the heartbeat is missing or stale, sleep is re-enabled so the Mac can
+        # never get stuck awake even if Vigil crashes.
         STATE_FILE="\(stateFile)"
-        WANT=0
-        if [ -f "$STATE_FILE" ]; then
-          NOW=$(date +%s)
-          MTIME=$(stat -f %m "$STATE_FILE" 2>/dev/null || echo 0)
-          CONTENT=$(cat "$STATE_FILE" 2>/dev/null)
-          AGE=$((NOW - MTIME))
-          if [ "$CONTENT" = "1" ] && [ "$AGE" -le \(Self.staleSeconds) ]; then
-            WANT=1
+        while true; do
+          WANT=0
+          if [ -f "$STATE_FILE" ]; then
+            NOW=$(date +%s)
+            MTIME=$(stat -f %m "$STATE_FILE" 2>/dev/null || echo 0)
+            CONTENT=$(cat "$STATE_FILE" 2>/dev/null)
+            AGE=$((NOW - MTIME))
+            if [ "$CONTENT" = "1" ] && [ "$AGE" -le \(Self.staleSeconds) ]; then
+              WANT=1
+            fi
           fi
-        fi
-        /usr/bin/pmset -a disablesleep $WANT
+          # Only call pmset when the state actually changes, to avoid churn.
+          CUR=$(/usr/bin/pmset -g | awk '/SleepDisabled/{print $2}')
+          [ -z "$CUR" ] && CUR=0
+          if [ "$CUR" != "$WANT" ]; then
+            /usr/bin/pmset -a disablesleep $WANT
+          fi
+          sleep \(Self.pollSeconds)
+        done
         """
     }
 
@@ -160,12 +189,8 @@ final class ClamshellController {
             </array>
             <key>RunAtLoad</key>
             <true/>
-            <key>StartInterval</key>
-            <integer>\(Self.daemonInterval)</integer>
-            <key>WatchPaths</key>
-            <array>
-                <string>\(stateFile)</string>
-            </array>
+            <key>KeepAlive</key>
+            <true/>
             <key>StandardErrorPath</key>
             <string>/dev/null</string>
             <key>StandardOutPath</key>

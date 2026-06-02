@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.3 — 2026-06-02
+
+Definitive reliability pass after a report of two opposite intermittent failures —
+the Mac sleeping on lid-close mid-task, *and* not sleeping after a session ended.
+Root-caused both from the user's actual power logs and transcripts.
+
+- **Semantic detector was blind (caused sleep-on-close).** Claude Code transcripts end
+  most lines with metadata records (`mode`, `ai-title`, …); the old detector's skip-list
+  missed `mode`, so during a quiet moment (model thinking, low CPU/network) it read
+  "idle," dropped the assertion, and the Mac clamshell-slept mid-task. Rewrote it to scan
+  for the last real `user`/`assistant` turn and ignore *all* metadata (robust to unknown
+  types).
+- **Staleness judged by the wrong clock (caused won't-sleep).** Mid-turn/pending state was
+  aged by the file's mtime, which trailing metadata writes refresh without advancing the
+  conversation — so finished/stale sessions looked "busy" indefinitely. Now every busy
+  decision uses the *record's own* ISO-8601 timestamp. Terminal stop reasons
+  (`end_turn`/`stop_sequence`/`max_tokens`/`refusal`) are idle; unknown reasons bias to busy.
+- **Lid-closed helper latency 15s → ~2s.** The heartbeat was written atomically (which
+  breaks launchd `WatchPaths`) and the daemon polled every 15s — the lid-close race window.
+  Now the heartbeat is written in place and the helper is a reliable long-running 2s loop
+  (`KeepAlive`, no `WatchPaths`/`StartInterval`); still fails safe (restores sleep ~30s
+  after Vigil stops).
+- Grace 300s → 120s (semantic now reliably bridges pauses, so the idle tail can be shorter).
+- Detector exposes semantic vs heuristic signals separately; engage is immediate on the
+  reliable semantic signal and debounced only for the noisy CPU/network heuristic.
+
 ## 1.0.2 — 2026-05-30
 
 Major reliability pass after a report of the Mac sleeping / showing a lock screen
