@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.0.4 — 2026-06-03
+
+Fixes a confusing over-count and a streaming regression.
+
+- **No more inflated "agents" count.** Subagent/workflow transcripts
+  (`…/<session>/subagents/…`, `journal.jsonl`) are no longer counted as separate
+  agents — one chat running a workflow used to show as several. Only top-level
+  chat sessions count now (the parent's own transcript shows `tool_use` while its
+  workflow runs, so active work is still detected; a rare >15 min workflow with
+  idle subagents is covered by the CPU/network heuristic).
+- **Menu shows only what's working.** The status line now reads "N chats working"
+  (or "No agent working — sleep allowed") instead of "X of Y agents," since the
+  count of idle open Claude windows (the "Y") was just noise.
+- **Long streaming responses no longer read as idle.** A regression briefly gave a
+  streaming message (`stop_reason: nil`) only a 180s window; Claude can stream a
+  long answer for minutes, so it now gets the full 15-min working window like
+  `tool_use`/`pause_turn`. Only genuinely terminal reasons are idle.
+- Added a `VIGIL_PROJECTS_DIR` override for isolated self-tests of the detector.
+
 ## 1.0.3 — 2026-06-02
 
 Definitive reliability pass after a report of two opposite intermittent failures —

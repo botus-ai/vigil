@@ -126,15 +126,16 @@ final class StatusMenuController: NSObject {
             statusTitleItem.title = "⚠︎ macOS refused the sleep assertion — screen may sleep"
         }
 
-        // Agents line: "X of Y agents working" so leftover idle sessions are clear.
+        // Agents line: show only what's actually WORKING (and thus keeping the Mac
+        // awake) — not how many idle Claude windows happen to be open, which is
+        // noise the user doesn't care about.
         let snap = status.snapshot
-        if snap.agentCount == 0 {
-            agentsItem.title = "No agents detected"
-        } else if snap.activeAgentCount == 0 {
-            agentsItem.title = "\(snap.agentCount) agent\(snap.agentCount == 1 ? "" : "s") · idle"
-        } else {
-            agentsItem.title = "\(snap.activeAgentCount) of \(snap.agentCount) agents working · "
+        if snap.activeAgentCount > 0 {
+            let n = snap.activeAgentCount
+            agentsItem.title = "\(n) chat\(n == 1 ? "" : "s") working · "
                 + "\(humanRate(snap.netBytesPerSec)) · \(String(format: "%.0f%% CPU", snap.cpuPercent))"
+        } else {
+            agentsItem.title = "No agent working — sleep allowed"
         }
 
         // Mode radios

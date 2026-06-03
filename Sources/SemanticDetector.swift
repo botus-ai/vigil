@@ -47,7 +47,11 @@ final class SemanticDetector {
     }
 
     private var projectsDir: URL {
-        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects")
+        // VIGIL_PROJECTS_DIR overrides the scan root (used by --diagnose self-tests).
+        if let override = ProcessInfo.processInfo.environment["VIGIL_PROJECTS_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
+        return URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects")
     }
 
     var isAvailable: Bool {
@@ -64,8 +68,17 @@ final class SemanticDetector {
             options: [.skipsHiddenFiles]) else { return 0 }
 
         let now = Date()
+        // Count only TOP-LEVEL chat sessions. Subagent/workflow transcripts
+        // (…/<session>/subagents/…, journal.jsonl) belong to a parent chat whose
+        // OWN transcript already shows a `tool_use` while the workflow runs — so
+        // the parent is detected as busy without them. Counting subagents
+        // separately both inflated the "agents" number and let a stale/abandoned
+        // subagent stream pin the Mac awake. (A rare >15 min workflow with idle
+        // subagents is covered by the CPU/network heuristic, or Keep Awake mode.)
         var busy = 0
         for case let url as URL in en where url.pathExtension == "jsonl" {
+            let path = url.path
+            if path.contains("/subagents/") || url.lastPathComponent == "journal.jsonl" { continue }
             guard let vals = try? url.resourceValues(forKeys: [.contentModificationDateKey]),
                   let mtime = vals.contentModificationDate else { continue }
             let fileAge = now.timeIntervalSince(mtime)
@@ -86,8 +99,10 @@ final class SemanticDetector {
         switch turn.kind {
         case .assistant:
             // Terminal reasons mean the turn is over, waiting for the human → idle.
-            // Everything else (nil = streaming, tool_use, pause_turn, or any
-            // unknown/future reason) is treated as still working — bias to awake.
+            // Every other state is legitimately working and can run for many
+            // minutes: nil = streaming a long response (slow networks / long
+            // outputs run well past a few minutes), tool_use = running a tool,
+            // pause_turn = will continue, unknown/future reasons → bias to awake.
             if isTerminal(turn.stopReason) { return false }
             return age < midTurnWindow
         case .user:
