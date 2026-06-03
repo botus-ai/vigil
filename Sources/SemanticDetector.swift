@@ -33,8 +33,10 @@ final class SemanticDetector {
     /// tools are covered by the CPU/network heuristic or Keep Awake mode.
     private let midTurnWindow: TimeInterval = 900
     /// A pending user/tool_result unanswered this long → the assistant isn't
-    /// actually working (a working assistant writes within seconds).
-    private let userPendingStale: TimeInterval = 180
+    /// actually working. Generous enough to cover a slow first response / long
+    /// "thinking" before the first output token (which can take minutes), while
+    /// still letting a stuck/abandoned message age out.
+    private let userPendingStale: TimeInterval = 300
 
     private static let isoFrac: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()

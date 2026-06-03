@@ -126,16 +126,24 @@ final class StatusMenuController: NSObject {
             statusTitleItem.title = "⚠︎ macOS refused the sleep assertion — screen may sleep"
         }
 
-        // Agents line: show only what's actually WORKING (and thus keeping the Mac
-        // awake) — not how many idle Claude windows happen to be open, which is
-        // noise the user doesn't care about.
+        // Detail line. We deliberately do NOT show a precise count of "working
+        // agents": chats flip between mid-turn and waiting every few seconds, so
+        // an instantaneous integer flickers and never matches what the user
+        // thinks of as "my open chats." Show the qualitative state plus live
+        // throughput/CPU as proof it's measuring.
         let snap = status.snapshot
-        if snap.activeAgentCount > 0 {
-            let n = snap.activeAgentCount
-            agentsItem.title = "\(n) chat\(n == 1 ? "" : "s") working · "
-                + "\(humanRate(snap.netBytesPerSec)) · \(String(format: "%.0f%% CPU", snap.cpuPercent))"
-        } else {
-            agentsItem.title = "No agent working — sleep allowed"
+        switch status.mode {
+        case .off:
+            agentsItem.title = "Sleep is allowed (Vigil off)"
+        case .keepAwake:
+            agentsItem.title = "Forced awake — until you switch it off"
+        case .automatic:
+            if status.holdingAwake {
+                agentsItem.title = "An agent is working · "
+                    + "\(humanRate(snap.netBytesPerSec)) · \(String(format: "%.0f%% CPU", snap.cpuPercent))"
+            } else {
+                agentsItem.title = "No agent working — Mac can sleep"
+            }
         }
 
         // Mode radios

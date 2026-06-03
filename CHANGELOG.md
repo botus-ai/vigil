@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.5 — 2026-06-03
+
+- **No more confusing/flickering agent count.** The menu used to show "N of M
+  agents working," but chats flip between mid-turn and waiting every few seconds,
+  so the integer flickered and never matched what you think of as your open
+  chats. The menu now shows the qualitative state — "An agent is working · rate ·
+  CPU" or "No agent working — Mac can sleep" — plus live throughput/CPU as proof
+  it's measuring. (Use `--diagnose` for the exact breakdown.)
+- **Slow first responses no longer drop early.** A chat where you sent a message
+  and the assistant is thinking for a while (before the first output) kept its
+  "pending" window for only 180s; widened to 300s so a slow/long first response
+  isn't read as idle.
+
 ## 1.0.4 — 2026-06-03
 
 Fixes a confusing over-count and a streaming regression.
