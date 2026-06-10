@@ -19,10 +19,11 @@ if CommandLine.arguments.contains("--diagnose") {
     let s = ActivityMonitor().diagnostic()
     print("""
     agents detected : \(s.agentCount)
-    agents working  : \(s.activeAgentCount)  (semantic=\(s.semanticBusy), heuristic=\(s.heuristicActive))
+    agents working  : \(s.activeAgentCount)  (hooks=\(s.hookActive), semantic=\(s.semanticBusy), heuristic=\(s.heuristicActive))
     keeping awake?  : \(s.isActive)
     busiest agent   : \(String(format: "%.0f", s.netBytesPerSec)) B/s, \(String(format: "%.1f", s.cpuPercent))% CPU
     watch patterns  : \(Preferences.shared.watchPatterns.joined(separator: ", "))
+    hooks installed : \(HooksInstaller().isInstalled)
     """)
     exit(0)
 }

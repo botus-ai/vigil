@@ -61,8 +61,9 @@ final class SemanticDetector {
         return FileManager.default.fileExists(atPath: projectsDir.path, isDirectory: &isDir) && isDir.boolValue
     }
 
-    /// Number of Claude sessions currently mid-turn.
-    func busySessionCount() -> Int {
+    /// Number of Claude sessions currently mid-turn, skipping sessions that the
+    /// hook detector governs (hooks are ground truth; transcripts are guessing).
+    func busySessionCount(excludingSessions governed: Set<String> = []) -> Int {
         let fm = FileManager.default
         guard let en = fm.enumerator(
             at: projectsDir,
@@ -81,6 +82,8 @@ final class SemanticDetector {
         for case let url as URL in en where url.pathExtension == "jsonl" {
             let path = url.path
             if path.contains("/subagents/") || url.lastPathComponent == "journal.jsonl" { continue }
+            // Transcript filename = session id; if hooks govern it, they decide.
+            if governed.contains(String(url.lastPathComponent.dropLast(6))) { continue }
             guard let vals = try? url.resourceValues(forKeys: [.contentModificationDateKey]),
                   let mtime = vals.contentModificationDate else { continue }
             let fileAge = now.timeIntervalSince(mtime)
@@ -88,6 +91,24 @@ final class SemanticDetector {
             if isBusy(url, now: now, fileAge: fileAge) { busy += 1 }
         }
         return busy
+    }
+
+    /// Cross-check for the hook detector: does this session's transcript show a
+    /// turn that ENDED (terminal stop_reason) after `marker`? Used to drop a
+    /// stale "active" hook marker whose Stop event was lost.
+    func turnEnded(sessionId: String, after marker: Date) -> Bool {
+        let fm = FileManager.default
+        guard let projects = try? fm.contentsOfDirectory(atPath: projectsDir.path) else { return false }
+        for proj in projects {
+            let p = projectsDir.appendingPathComponent(proj).appendingPathComponent(sessionId + ".jsonl")
+            guard fm.fileExists(atPath: p.path) else { continue }
+            guard let turn = lastTurn(p),
+                  case .assistant = turn.kind,
+                  isTerminal(turn.stopReason),
+                  let ts = turn.timestamp else { return false }
+            return ts > marker
+        }
+        return false
     }
 
     private enum TurnKind { case user, assistant }

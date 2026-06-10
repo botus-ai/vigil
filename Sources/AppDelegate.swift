@@ -18,6 +18,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LaunchAtLogin.set(true)
         }
 
+        // Out of the box: install the ground-truth Claude Code hook (merged into
+        // ~/.claude/settings.json with a one-time backup; removable from the menu).
+        // Called every launch: the settings merge is idempotent, and rewriting
+        // the hook script keeps it current across app updates.
+        if Preferences.shared.hooksEnabled, !HooksInstaller().install() {
+            NSLog("Vigil: hook install failed — falling back to transcript/heuristic detection")
+        }
+
         // First-run welcome + optional lid-closed setup (after the menu appears).
         if !Preferences.shared.didOnboard {
             Preferences.shared.didOnboard = true

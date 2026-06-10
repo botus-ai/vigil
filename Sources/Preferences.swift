@@ -25,6 +25,7 @@ final class Preferences {
         static let watchExcludes = "watchExcludes"
         static let autoCleanRedundant = "autoCleanRedundant"
         static let semanticDetection = "semanticDetection"
+        static let hooksEnabled = "hooksEnabled"
         static let didOnboard = "didOnboard"
         static let loginItemUserDisabled = "loginItemUserDisabled"
     }
@@ -52,6 +53,7 @@ final class Preferences {
             Key.watchExcludes: Preferences.defaultExcludes,
             Key.autoCleanRedundant: false,
             Key.semanticDetection: true,
+            Key.hooksEnabled: true,
         ])
     }
 
@@ -135,6 +137,13 @@ final class Preferences {
     var semanticDetection: Bool {
         get { defaults.bool(forKey: Key.semanticDetection) }
         set { defaults.set(newValue, forKey: Key.semanticDetection); changed() }
+    }
+
+    /// Ground-truth detection via Claude Code hooks (installs a tiny hook into
+    /// ~/.claude/settings.json so Claude itself reports turn start/end).
+    var hooksEnabled: Bool {
+        get { defaults.bool(forKey: Key.hooksEnabled) }
+        set { defaults.set(newValue, forKey: Key.hooksEnabled); changed() }
     }
 
     /// First-run onboarding shown?

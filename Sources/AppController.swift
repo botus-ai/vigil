@@ -69,7 +69,10 @@ final class AppController {
         } else {
             consecutiveActiveTicks = 0
         }
-        let working = snap.semanticBusy > 0 || consecutiveActiveTicks >= activateAfterTicks
+        // Hooks (ground truth) and semantic (fallback) engage immediately; only
+        // the noisy CPU/network heuristic needs the debounce.
+        let working = snap.hookActive > 0 || snap.semanticBusy > 0
+            || consecutiveActiveTicks >= activateAfterTicks
         if working { lastActive = Date() }
         liveActive = working
         evaluate()
@@ -99,7 +102,7 @@ final class AppController {
         let wantDisplay = (prefs.mode == .keepAwake || prefs.keepDisplayAwake) && engaged
 
         if ProcessInfo.processInfo.environment["VIGIL_DEBUG"] != nil {
-            NSLog("VIGIL mode=\(prefs.mode.rawValue) agents=\(lastSnapshot.agentCount) sem=\(lastSnapshot.semanticBusy) heur=\(lastSnapshot.heuristicActive) ticks=\(consecutiveActiveTicks) live=\(liveActive) engaged=\(engaged) display=\(wantDisplay)")
+            NSLog("VIGIL mode=\(prefs.mode.rawValue) agents=\(lastSnapshot.agentCount) hooks=\(lastSnapshot.hookActive) sem=\(lastSnapshot.semanticBusy) heur=\(lastSnapshot.heuristicActive) ticks=\(consecutiveActiveTicks) live=\(liveActive) engaged=\(engaged) display=\(wantDisplay)")
         }
         sleep.apply(awake: engaged, keepDisplayAwake: wantDisplay)
 

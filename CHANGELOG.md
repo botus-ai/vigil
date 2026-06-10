@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.1.0 — 2026-06-10
+
+**Detection rebuilt on ground truth.** After repeated reports of both failure
+modes (sleeps mid-task / won't sleep after), the root problem was the approach:
+guessing agent state from transcript formats and CPU/network thresholds is
+inherently fragile. Vigil now installs a tiny **Claude Code hook** (merged into
+`~/.claude/settings.json` with a one-time backup; removable from the menu), so
+Claude itself reports session state the instant it changes:
+
+- `UserPromptSubmit` / `PreToolUse` / `PostToolUse` → session is **working**
+- `Notification` (permission prompt / waiting for input) → **a human is needed**
+  — the Mac may sleep instead of staying awake at a forgotten permission dialog
+- `Stop` / `SessionEnd` → **turn over** — sleep follows after the short grace
+
+No more format guessing, no thresholds, no polling lag for Claude Code sessions.
+Crash-safe: an "active" marker only counts while its claude process is alive
+(and never longer than 2h without a refresh).
+
+Also found & fixed the main "never sleeps" culprit on real hardware: **an idle
+Claude Desktop window**. Its Electron helpers burn ~10% CPU just compositing the
+UI, which permanently tripped the CPU heuristic. GUI apps are now judged by
+sustained network only (streaming = working); CPU stays meaningful for CLI
+agents. Plus: transcript detection now only covers sessions without hook
+markers, and Claude Code CLI processes are dropped from the heuristic when
+hooks are live.
+
 ## 1.0.5 — 2026-06-03
 
 - **No more confusing/flickering agent count.** The menu used to show "N of M

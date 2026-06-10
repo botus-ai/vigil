@@ -82,7 +82,8 @@ Click the menu-bar eye icon:
 - **Automatic** — keep awake only while an AI agent is working (the default).
 - **Keep Awake** / **Off** — classic manual modes.
 - **Watch for…** — pick which AI tools to track.
-- **Semantic detection** — read Claude transcripts for precise mid-turn detection.
+- **Precise detection (Claude Code hooks)** — ground truth from Claude itself (default on).
+- **Semantic detection** — read Claude transcripts (fallback for sessions without hooks).
 - **Keep awake with lid closed** — one-time admin approval installs the helper.
 - **Stop other keep-awake tools** — quit redundant `caffeinate` / scripts.
 - **Launch at Login** — on by default.
@@ -91,17 +92,23 @@ Icons: `eye` = idle · `eye.fill` = keeping awake · `bolt.fill` = force-awake �
 
 ## How it works
 
-Each agent session is evaluated **individually** (so a crowd of idle/leftover sessions can
-never falsely keep the Mac awake). A session is *working* when any of these is true:
+Detection is layered, most reliable first:
 
-1. **Semantic state (Claude)** — its transcript shows it's mid-turn (`stop_reason != end_turn`).
-2. **API throughput** — sustained network traffic, *including loopback* so agents talking to
-   a local model server (e.g. ollama on `127.0.0.1`) count too.
-3. **Subtree CPU** — the process *and its children* are busy (catches long local test/build runs).
+1. **Ground truth — Claude Code hooks.** Vigil installs a tiny hook (merged into
+   `~/.claude/settings.json`, one-time backup kept, removable from the menu), so Claude
+   itself reports state the instant it changes: prompt submitted / tool running → working;
+   permission prompt or waiting for input → a human is needed (sleep allowed); turn done →
+   idle. No guessing, no polling lag. Crash-safe: a "working" marker only counts while its
+   claude process is actually alive.
+2. **Semantic state (fallback)** — for sessions without hooks, the transcript shows whether
+   it's mid-turn (`stop_reason != end_turn`).
+3. **Network/CPU heuristic (for non-Claude tools)** — sustained traffic *including loopback*
+   (local ollama counts) or subtree CPU. GUI apps like Claude Desktop are judged by network
+   only — an idle Electron window burns ~10% CPU just compositing, which is not "work".
 
 To avoid false positives, `claude`-named background tooling (vault sync, memory daemons,
-Vigil's own helper) is excluded, and detection is debounced so a single CPU blip can't pin
-the Mac awake.
+Vigil's own helper) is excluded, and the heuristic is debounced so a single CPU blip can't
+pin the Mac awake.
 
 While any agent works, Vigil holds IOKit power assertions for **both** system and display
 sleep (so the screen doesn't lock on you mid-task), plus a grace period after work stops.

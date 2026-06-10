@@ -17,6 +17,7 @@ final class StatusMenuController: NSObject {
     private let launchItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunch), keyEquivalent: "")
     private let watchItem = NSMenuItem(title: "Watch for…", action: nil, keyEquivalent: "")
     private let semanticItem = NSMenuItem(title: "Semantic detection (Claude transcripts)", action: #selector(toggleSemantic), keyEquivalent: "")
+    private let hooksItem = NSMenuItem(title: "Precise detection (Claude Code hooks)", action: #selector(toggleHooks), keyEquivalent: "")
     private let cleanupItem = NSMenuItem(title: "Stop other keep-awake tools", action: #selector(runCleanup), keyEquivalent: "")
     private let autoCleanItem = NSMenuItem(title: "Auto-stop redundant keep-awake tools", action: #selector(toggleAutoClean), keyEquivalent: "")
     private var presetItems: [(item: NSMenuItem, pattern: String)] = []
@@ -61,8 +62,11 @@ final class StatusMenuController: NSObject {
         }
         watchItem.submenu = watchSub
         menu.addItem(watchItem)
+        hooksItem.target = self
+        hooksItem.toolTip = "Claude Code itself reports turn start/end via a hook — exact, instant detection. Installs into ~/.claude/settings.json (backup kept)."
+        menu.addItem(hooksItem)
         semanticItem.target = self
-        semanticItem.toolTip = "Read ~/.claude/projects to know when a Claude session is mid-turn."
+        semanticItem.toolTip = "Read ~/.claude/projects to know when a Claude session is mid-turn (fallback for sessions without hooks)."
         menu.addItem(semanticItem)
         menu.addItem(.separator())
 
@@ -157,6 +161,7 @@ final class StatusMenuController: NSObject {
             item.state = prefs.isWatching(pattern) ? .on : .off
         }
         semanticItem.state = prefs.semanticDetection ? .on : .off
+        hooksItem.state = (prefs.hooksEnabled && HooksInstaller().isInstalled) ? .on : .off
 
         // Toggles
         displayItem.state = prefs.keepDisplayAwake ? .on : .off
@@ -207,6 +212,24 @@ final class StatusMenuController: NSObject {
 
     @objc private func toggleSemantic() {
         Preferences.shared.semanticDetection.toggle()
+    }
+
+    @objc private func toggleHooks() {
+        let installer = HooksInstaller()
+        if installer.isInstalled {
+            Preferences.shared.hooksEnabled = false
+            if !installer.uninstall() {
+                alert(title: "Couldn’t remove the Claude hook",
+                      text: "You can remove it manually from ~/.claude/settings.json (entries mentioning vigil-hook.py).")
+            }
+        } else {
+            Preferences.shared.hooksEnabled = true
+            if !installer.install() {
+                alert(title: "Couldn’t install the Claude hook",
+                      text: "~/.claude/settings.json could not be parsed or written. Vigil falls back to transcript/heuristic detection.")
+            }
+        }
+        controller.refreshStatus()
     }
 
     @objc private func runCleanup() {

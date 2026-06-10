@@ -3,14 +3,15 @@ import Foundation
 struct ActivitySnapshot {
     var agentCount: Int          // number of detected agent sessions (root processes)
     var activeAgentCount: Int    // how many of those are working right now (combined)
-    var semanticBusy: Int        // Claude sessions mid-turn per transcript (reliable signal)
+    var hookActive: Int          // sessions mid-turn per Claude Code hooks (ground truth)
+    var semanticBusy: Int        // non-hooked sessions mid-turn per transcript (fallback)
     var heuristicActive: Int     // sessions over the network/CPU threshold (noisy signal)
     var isActive: Bool           // at least one agent is working right now
     var netBytesPerSec: Double   // throughput of the busiest agent
     var cpuPercent: Double       // CPU% of the busiest agent's subtree
 
-    static let empty = ActivitySnapshot(agentCount: 0, activeAgentCount: 0, semanticBusy: 0,
-                                        heuristicActive: 0, isActive: false,
+    static let empty = ActivitySnapshot(agentCount: 0, activeAgentCount: 0, hookActive: 0,
+                                        semanticBusy: 0, heuristicActive: 0, isActive: false,
                                         netBytesPerSec: 0, cpuPercent: 0)
 }
 
@@ -29,6 +30,14 @@ final class ActivityMonitor {
     private var timer: DispatchSourceTimer?
 
     private let semantic = SemanticDetector()
+    private let hooks = HookSessionDetector()
+
+    init() {
+        // Lost-Stop guard: stale "active" hook markers are validated against the
+        // session transcript (capture `semantic` directly — no cycle).
+        let sem = semantic
+        hooks.transcriptSaysEnded = { sid, marker in sem.turnEnded(sessionId: sid, after: marker) }
+    }
 
     // Per-PID cumulative byte counters from the previous nettop sample.
     private var prevBytesIn: [Int: UInt64] = [:]
@@ -77,23 +86,38 @@ final class ActivityMonitor {
         guard !patterns.isEmpty else { return .empty }
         let excludes = prefs.watchExcludes.map { $0.lowercased() }.filter { !$0.isEmpty }
 
-        // Primary signal for Claude: transcript state. Counts mid-turn sessions.
-        let semanticBusy = prefs.semanticDetection ? semantic.busySessionCount() : 0
+        // PRIMARY signal: Claude Code hooks (ground truth — Claude tells us when a
+        // turn starts/ends). Sessions with a hook marker are "governed": for them
+        // we trust the hooks completely and skip transcript guessing.
+        let hookScan = hooks.scan()
+        let hooksLive = !hookScan.governedSessions.isEmpty
+
+        // FALLBACK signal: transcript state, only for sessions hooks don't govern
+        // (sessions started before hook install, or if hooks are removed).
+        let semanticBusy = prefs.semanticDetection
+            ? semantic.busySessionCount(excludingSessions: hookScan.governedSessions) : 0
 
         let procs = readProcesses()
         // A process is a watched agent if it matches a watch pattern AND is not
         // excluded. The exclude list keeps "claude"-named background tooling
         // (vault sync, memory daemons, Vigil's own helper) from being mistaken
-        // for a working agent and pinning the Mac awake.
+        // for a working agent and pinning the Mac awake. When hooks are live,
+        // Claude Code CLI processes are governed by hooks — drop them from the
+        // CPU/network heuristic too, so an idle VS Code session that briefly
+        // spikes CPU can't fake "working".
         let watched = procs.filter { p in
             let c = p.command.lowercased()
             guard patterns.contains(where: { c.contains($0) }) else { return false }
-            return !excludes.contains(where: { c.contains($0) })
+            if excludes.contains(where: { c.contains($0) }) { return false }
+            if hooksLive && c.contains("native-binary/claude") { return false }
+            return true
         }
-        guard !watched.isEmpty || semanticBusy > 0 else {
+        guard !watched.isEmpty || semanticBusy > 0 || hookScan.activeCount > 0 else {
             prevBytesIn = [:]
             prevSampleDate = nil
-            return .empty
+            var snap = ActivitySnapshot.empty
+            snap.agentCount = hookScan.governedSessions.count
+            return snap
         }
 
         let watchedPIDs = Set(watched.map { $0.pid })
@@ -133,7 +157,11 @@ final class ActivityMonitor {
 
             // Evaluated per session: a single working agent is enough, and a
             // crowd of idle ones never sums its way over the threshold.
-            if rate > prefs.netThresholdBytesPerSec || cpu > prefs.cpuThresholdPercent {
+            // GUI apps (Claude Desktop & co) idle at ~10% CPU just compositing
+            // their Electron UI, so CPU is meaningless for them — only sustained
+            // network (streaming a response) counts. CLI agents keep CPU+network.
+            let isGUIApp = session.command.contains(".app/Contents/MacOS/")
+            if rate > prefs.netThresholdBytesPerSec || (!isGUIApp && cpu > prefs.cpuThresholdPercent) {
                 activeCount += 1
             }
             peakRate = max(peakRate, rate)
@@ -143,16 +171,17 @@ final class ActivityMonitor {
         prevBytesIn = bytesIn
         prevSampleDate = now
 
-        // Combine the heuristic (network/CPU) with the semantic signal: an agent
-        // is working if either says so.
-        let totalAgents = max(sessions.count, semanticBusy)
-        let activeAgents = max(activeCount, semanticBusy)
+        // Combine: hooks (ground truth) + semantic (non-hooked fallback) engage
+        // immediately; the network/CPU heuristic is debounced by the controller.
+        let immediate = hookScan.activeCount + semanticBusy
+        let totalAgents = max(sessions.count + hookScan.governedSessions.count, immediate)
 
         return ActivitySnapshot(agentCount: totalAgents,
-                                activeAgentCount: activeAgents,
+                                activeAgentCount: max(activeCount, immediate),
+                                hookActive: hookScan.activeCount,
                                 semanticBusy: semanticBusy,
                                 heuristicActive: activeCount,
-                                isActive: activeAgents > 0,
+                                isActive: immediate > 0,
                                 netBytesPerSec: peakRate,
                                 cpuPercent: peakCPU)
     }
