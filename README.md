@@ -11,6 +11,9 @@
 ![platform](https://img.shields.io/badge/macOS-13%2B-blue)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-ready-black)
 [![stars](https://img.shields.io/github/stars/botus-ai/vigil?style=social)](https://github.com/botus-ai/vigil/stargazers)
+[![downloads](https://img.shields.io/github/downloads/botus-ai/vigil/total)](https://github.com/botus-ai/vigil/releases/latest)
+
+### [⬇️ Download Vigil.dmg](https://github.com/botus-ai/vigil/releases/latest) — free, 2-minute install
 
 </div>
 
