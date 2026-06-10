@@ -26,6 +26,7 @@ final class Preferences {
         static let autoCleanRedundant = "autoCleanRedundant"
         static let semanticDetection = "semanticDetection"
         static let hooksEnabled = "hooksEnabled"
+        static let guiBurstWindow = "guiBurstWindowSeconds"
         static let didOnboard = "didOnboard"
         static let loginItemUserDisabled = "loginItemUserDisabled"
     }
@@ -54,6 +55,7 @@ final class Preferences {
             Key.autoCleanRedundant: false,
             Key.semanticDetection: true,
             Key.hooksEnabled: true,
+            Key.guiBurstWindow: 300.0,
         ])
     }
 
@@ -144,6 +146,13 @@ final class Preferences {
     var hooksEnabled: Bool {
         get { defaults.bool(forKey: Key.hooksEnabled) }
         set { defaults.set(newValue, forKey: Key.hooksEnabled); changed() }
+    }
+
+    /// How long a GUI agent (Claude Desktop & co) stays "working" after its last
+    /// sustained network burst — bridges quiet thinking/tool gaps between streams.
+    var guiBurstWindowSeconds: TimeInterval {
+        get { defaults.double(forKey: Key.guiBurstWindow) }
+        set { defaults.set(newValue, forKey: Key.guiBurstWindow); changed() }
     }
 
     /// First-run onboarding shown?

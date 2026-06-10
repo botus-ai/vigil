@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.1 — 2026-06-10
+
+**Claude Desktop (and other GUI agents) now detected properly.** Hooks cover
+Claude Code, but Desktop has no hooks and relied on the network heuristic, which
+dropped below threshold during thinking/tool pauses between streams — so the Mac
+could sleep mid-task. GUI apps now get:
+
+- a **streaming burst window**: two consecutive over-threshold samples open a
+  ~5-minute "working" window that bridges quiet gaps between bursts (a single
+  telemetry blip opens nothing);
+- **tool CPU**: CPU of non-bundle child processes (bash/python the agent spawned)
+  counts as work — the Electron UI's own ~10% idle CPU still doesn't.
+
+Verified live: idle Desktop stays idle; a streaming GUI agent engages within
+~15 s and stays engaged through pauses. Tunable via `guiBurstWindowSeconds`.
+
 ## 1.1.0 — 2026-06-10
 
 **Detection rebuilt on ground truth.** After repeated reports of both failure

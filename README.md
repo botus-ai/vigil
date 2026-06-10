@@ -14,11 +14,11 @@
 
 </div>
 
-Vigil is a tiny macOS menu-bar app for developers who run AI coding agents. Unlike
+Vigil is a tiny macOS menu-bar app for developers who run AI agents. Unlike
 Amphetamine or Caffeine, **there's no switch to flip.** Vigil detects active
-**Claude Code, Cursor, Codex, aider** and other agent sessions and keeps your Mac awake
-*only while they're actually working* — even with the **lid closed**. The moment your
-agents finish, your Mac sleeps and saves battery.
+**Claude Code, Claude Desktop, Codex, Cursor, aider, Ollama** and other agent sessions
+and keeps your Mac awake *only while they're actually working* — even with the
+**lid closed**. The moment your agents finish, your Mac sleeps and saves battery.
 
 Close the lid and walk away. Your agent keeps running. When it's done, the Mac sleeps.
 
@@ -54,14 +54,19 @@ entirely — it's automatic, and it's accurate.
   display) — backed by a crash-safe helper that always restores normal sleep.
 - 🧹 **Cleans up after itself.** Finds and stops redundant `caffeinate` / DIY keep-awake
   scripts so Vigil is the single source of truth.
-- 👀 **Honest status.** The menu shows "X of Y agents working", live throughput and CPU.
+- 👀 **Honest status.** The menu shows whether an agent is working right now, with live throughput and CPU as proof.
 - 🪶 **Tiny & private.** Menu-bar only, no Dock icon, no accounts, no network calls.
 
-## Install
+## Install (2 minutes)
 
-**Download (recommended)** — grab the latest `Vigil.dmg` from
-[Releases](https://github.com/botus-ai/vigil/releases), drag **Vigil** to Applications,
-and launch it. (Until notarized builds land, right-click the app → **Open** on first run.)
+1. Download the latest `Vigil.dmg` from **[Releases](https://github.com/botus-ai/vigil/releases/latest)**.
+2. Drag **Vigil** into **Applications**.
+3. First launch: **right-click the app → Open → Open** (builds aren't notarized yet, macOS warns once).
+4. That's it — the eye appears in your menu bar, already in Automatic mode. On first run
+   Vigil offers the optional lid-closed mode (one admin prompt installs a fail-safe helper).
+
+Requires macOS 13+ and the Xcode Command Line Tools' `python3` for Claude Code hooks
+(every Claude Code user already has it).
 
 **Build from source** — needs the Swift toolchain (Xcode or Command Line Tools), no Xcode
 project required:
@@ -81,7 +86,7 @@ Click the menu-bar eye icon:
 
 - **Automatic** — keep awake only while an AI agent is working (the default).
 - **Keep Awake** / **Off** — classic manual modes.
-- **Watch for…** — pick which AI tools to track.
+- **Watch for…** — pick which AI tools to track (Claude, Codex, Gemini, aider, Cursor, Copilot, Ollama).
 - **Precise detection (Claude Code hooks)** — ground truth from Claude itself (default on).
 - **Semantic detection** — read Claude transcripts (fallback for sessions without hooks).
 - **Keep awake with lid closed** — one-time admin approval installs the helper.
@@ -102,9 +107,12 @@ Detection is layered, most reliable first:
    claude process is actually alive.
 2. **Semantic state (fallback)** — for sessions without hooks, the transcript shows whether
    it's mid-turn (`stop_reason != end_turn`).
-3. **Network/CPU heuristic (for non-Claude tools)** — sustained traffic *including loopback*
-   (local ollama counts) or subtree CPU. GUI apps like Claude Desktop are judged by network
-   only — an idle Electron window burns ~10% CPU just compositing, which is not "work".
+3. **Network/CPU heuristic (Claude Desktop, Codex, any GUI/CLI tool)** — sustained traffic
+   *including loopback* (local ollama counts) or subtree CPU. GUI apps get special handling:
+   an idle Electron window burns ~10% CPU just compositing (not "work"), so only sustained
+   streaming bursts count — and a burst opens a ~5-minute working window that bridges the
+   quiet thinking/tool gaps between streams. CPU of real tool children (bash/python spawned
+   by the agent) still counts.
 
 To avoid false positives, `claude`-named background tooling (vault sync, memory daemons,
 Vigil's own helper) is excluded, and the heuristic is debounced so a single CPU blip can't

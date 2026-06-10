@@ -43,6 +43,13 @@ final class ActivityMonitor {
     private var prevBytesIn: [Int: UInt64] = [:]
     private var prevSampleDate: Date?
 
+    // GUI-app burst tracking (Claude Desktop & co): streaming arrives in bursts
+    // with quiet thinking/tool gaps in between. Two consecutive over-threshold
+    // samples open a per-session "working window" that bridges those gaps; a
+    // single telemetry blip opens nothing. Keyed by session root pid.
+    private var guiBurstTicks: [Int: Int] = [:]
+    private var guiLastBurst: [Int: Date] = [:]
+
     private let psRegex = try! NSRegularExpression(
         pattern: #"^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+(.*)$"#)
 
@@ -124,6 +131,7 @@ final class ActivityMonitor {
         let childrenByParent = Dictionary(grouping: procs, by: { $0.ppid })
             .mapValues { $0.map { $0.pid } }
         let cpuByPID = Dictionary(procs.map { ($0.pid, $0.cpu) }, uniquingKeysWith: { a, _ in a })
+        let commandByPID = Dictionary(procs.map { ($0.pid, $0.command) }, uniquingKeysWith: { a, _ in a })
 
         // Read network counters once; compute per-PID deltas below.
         let now = Date()
@@ -157,16 +165,44 @@ final class ActivityMonitor {
 
             // Evaluated per session: a single working agent is enough, and a
             // crowd of idle ones never sums its way over the threshold.
-            // GUI apps (Claude Desktop & co) idle at ~10% CPU just compositing
-            // their Electron UI, so CPU is meaningless for them — only sustained
-            // network (streaming a response) counts. CLI agents keep CPU+network.
             let isGUIApp = session.command.contains(".app/Contents/MacOS/")
-            if rate > prefs.netThresholdBytesPerSec || (!isGUIApp && cpu > prefs.cpuThresholdPercent) {
+            if isGUIApp {
+                // GUI apps (Claude Desktop & co) idle at ~10% CPU just compositing
+                // their Electron UI, so the bundle's own CPU is meaningless. Two
+                // working signals instead:
+                //  • sustained network bursts (streaming) open a working window
+                //    that bridges quiet thinking/tool gaps between bursts;
+                //  • CPU of NON-bundle child processes (bash/python tools the
+                //    agent spawned) — that's real local work.
+                if rate > prefs.netThresholdBytesPerSec {
+                    guiBurstTicks[session.pid, default: 0] += 1
+                } else {
+                    guiBurstTicks[session.pid] = 0
+                }
+                if guiBurstTicks[session.pid, default: 0] >= 2 {
+                    guiLastBurst[session.pid] = now
+                }
+                let burstFresh = guiLastBurst[session.pid].map {
+                    now.timeIntervalSince($0) < prefs.guiBurstWindowSeconds
+                } ?? false
+                let toolCPU = subtree.reduce(0.0) { sum, pid in
+                    let cmd = commandByPID[pid] ?? ""
+                    return cmd.contains(".app/Contents/") ? sum : sum + (cpuByPID[pid] ?? 0)
+                }
+                if burstFresh || toolCPU > prefs.cpuThresholdPercent {
+                    activeCount += 1
+                }
+            } else if rate > prefs.netThresholdBytesPerSec || cpu > prefs.cpuThresholdPercent {
                 activeCount += 1
             }
             peakRate = max(peakRate, rate)
             peakCPU = max(peakCPU, cpu)
         }
+
+        // Drop burst state for sessions that no longer exist.
+        let sessionPIDs = Set(sessions.map { $0.pid })
+        guiBurstTicks = guiBurstTicks.filter { sessionPIDs.contains($0.key) }
+        guiLastBurst = guiLastBurst.filter { sessionPIDs.contains($0.key) }
 
         prevBytesIn = bytesIn
         prevSampleDate = now
