@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.3 — 2026-06-11
+
+**Display no longer kept awake by default — and never lights up behind a closed
+lid.** A real report: agents "finished", lid closed, yet the panel glowed behind
+it and the Mac stayed up ~an hour. Two causes:
+
+- The Mac was, in fact, kept awake **correctly** — a *second* Claude chat was
+  still running autonomously in the background. You just couldn't see which one.
+  Vigil now **names what's keeping the Mac awake** in the menu and in
+  `--diagnose` ("Awake — Claude session a1b2c3d4"), so a forgotten/background
+  chat is never a mystery.
+- The **display-keep-awake assertion was the thing glowing behind the lid** (and
+  draining battery). It's not needed for Vigil's job — keeping the *system* awake
+  for agents — so it's now **OFF by default**. The display follows normal macOS
+  behaviour (sleeps/locks when you step away); agents keep running regardless.
+  It's still available as an opt-in ("Keep display awake too") for watching
+  progress with the lid open, and even then is never held while the lid is closed.
+
+
 ## 1.1.2 — 2026-06-11
 
 **Closing the lid now means "sleep now" when agents are done.** Two fixes from a

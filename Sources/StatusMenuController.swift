@@ -143,8 +143,10 @@ final class StatusMenuController: NSObject {
             agentsItem.title = "Forced awake — until you switch it off"
         case .automatic:
             if status.holdingAwake {
-                agentsItem.title = "An agent is working · "
-                    + "\(humanRate(snap.netBytesPerSec)) · \(String(format: "%.0f%% CPU", snap.cpuPercent))"
+                // Name what's keeping the Mac awake, so a forgotten/background
+                // chat is never a mystery.
+                let why = snap.reasons.first ?? "an agent is working"
+                agentsItem.title = "Awake — " + why
             } else {
                 agentsItem.title = "No agent working — Mac can sleep"
             }

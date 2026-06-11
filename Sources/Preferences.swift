@@ -44,7 +44,13 @@ final class Preferences {
     private init() {
         defaults.register(defaults: [
             Key.mode: OperatingMode.automatic.rawValue,
-            Key.keepDisplayAwake: true,
+            // Default OFF: Vigil's job is keeping the SYSTEM awake for agents.
+            // Holding the display awake isn't needed for that, and it relights the
+            // panel behind a closed lid (glow + battery drain). The display now
+            // follows normal macOS behaviour (sleeps/locks when you step away);
+            // agents keep running regardless. Opt-in for those who want the screen
+            // to stay on while watching progress with the lid open.
+            Key.keepDisplayAwake: false,
             Key.lidClosedMode: false,
             Key.gracePeriod: 120.0,
             Key.pollInterval: 5.0,

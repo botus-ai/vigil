@@ -5,6 +5,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menu: StatusMenuController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // One-time migration: the display-keep-awake default flipped to OFF in
+        // 1.1.3 (it relit the panel behind a closed lid). Clear any stored "true"
+        // from older builds so existing users get the new default; they can still
+        // turn it back on from the menu.
+        let d = UserDefaults.standard
+        if !d.bool(forKey: "migratedDisplayDefault113") {
+            d.removeObject(forKey: "keepDisplayAwake")
+            d.set(true, forKey: "migratedDisplayDefault113")
+        }
+
         menu = StatusMenuController(controller: controller)
         controller.start()
 

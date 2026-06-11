@@ -9,6 +9,7 @@ struct ActivitySnapshot {
     var isActive: Bool           // at least one agent is working right now
     var netBytesPerSec: Double   // throughput of the busiest agent
     var cpuPercent: Double       // CPU% of the busiest agent's subtree
+    var reasons: [String] = []   // human-readable: what is keeping the Mac awake
 
     static let empty = ActivitySnapshot(agentCount: 0, activeAgentCount: 0, hookActive: 0,
                                         semanticBusy: 0, heuristicActive: 0, isActive: false,
@@ -212,6 +213,19 @@ final class ActivityMonitor {
         let immediate = hookScan.activeCount + semanticBusy
         let totalAgents = max(sessions.count + hookScan.governedSessions.count, immediate)
 
+        // Human-readable "what's keeping the Mac awake" so a forgotten/background
+        // chat is never a mystery. Hook sessions show their short id; heuristic
+        // shows the app/process.
+        var reasons: [String] = []
+        reasons += hookScan.activeSessions.map { "Claude session " + String($0.prefix(8)) }
+        if semanticBusy > 0 { reasons.append("\(semanticBusy) Claude chat(s) mid-turn (transcript)") }
+        if activeCount > 0 {
+            for s in sessions where (commandByPID[s.pid] ?? s.command).contains(".app/Contents/MacOS/") {
+                reasons.append("Claude Desktop / GUI app streaming")
+                break
+            }
+        }
+
         return ActivitySnapshot(agentCount: totalAgents,
                                 activeAgentCount: max(activeCount, immediate),
                                 hookActive: hookScan.activeCount,
@@ -219,7 +233,8 @@ final class ActivityMonitor {
                                 heuristicActive: activeCount,
                                 isActive: immediate > 0,
                                 netBytesPerSec: peakRate,
-                                cpuPercent: peakCPU)
+                                cpuPercent: peakCPU,
+                                reasons: reasons)
     }
 
     private func collect(_ pid: Int, _ children: [Int: [Int]], into set: inout Set<Int>) {

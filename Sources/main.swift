@@ -24,6 +24,7 @@ if CommandLine.arguments.contains("--diagnose") {
     busiest agent   : \(String(format: "%.0f", s.netBytesPerSec)) B/s, \(String(format: "%.1f", s.cpuPercent))% CPU
     watch patterns  : \(Preferences.shared.watchPatterns.joined(separator: ", "))
     hooks installed : \(HooksInstaller().isInstalled)
+    keeping awake   : \(s.reasons.isEmpty ? "nothing" : s.reasons.joined(separator: "; "))
     """)
     exit(0)
 }

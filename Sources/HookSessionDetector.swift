@@ -4,8 +4,9 @@ struct HookScan {
     var governedSessions: Set<String>   // session ids that have any marker (hooks are live for them)
     var activeCount: Int                // sessions confirmed mid-turn right now
     var waitingCount: Int               // sessions waiting for the human (permission / idle prompt)
+    var activeSessions: [String]        // session ids currently keeping the Mac awake
 
-    static let empty = HookScan(governedSessions: [], activeCount: 0, waitingCount: 0)
+    static let empty = HookScan(governedSessions: [], activeCount: 0, waitingCount: 0, activeSessions: [])
 }
 
 /// Ground-truth activity detection via Claude Code hooks.
@@ -79,7 +80,7 @@ final class HookSessionDetector {
                    ended(name, Date(timeIntervalSince1970: ts)) {
                     ok = false
                 }
-                if ok { result.activeCount += 1 }
+                if ok { result.activeCount += 1; result.activeSessions.append(name) }
             case "waiting":
                 result.waitingCount += 1
             default:
