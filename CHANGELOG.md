@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.2 — 2026-06-11
+
+**Closing the lid now means "sleep now" when agents are done.** Two fixes from a
+real report (display glowing behind the closed lid for ~2 minutes after agents
+finished — exactly the grace period):
+
+- The post-work **grace tail no longer applies once the lid closes**: if nothing
+  is actively working, lid-close puts the Mac to sleep within seconds. (Closing
+  the lid while an agent IS working still keeps it awake — that's the point.)
+- The **display assertion is never held with the lid closed** — with
+  `disablesleep` active it used to relight the panel behind the shut lid.
+
+
 ## 1.1.1 — 2026-06-10
 
 **Claude Desktop (and other GUI agents) now detected properly.** Hooks cover

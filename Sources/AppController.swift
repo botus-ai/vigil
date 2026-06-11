@@ -83,6 +83,7 @@ final class AppController {
 
     private func evaluate() {
         let prefs = Preferences.shared
+        let lidClosed = LidState.isClosed
         let engaged: Bool
         switch prefs.mode {
         case .off:
@@ -91,18 +92,24 @@ final class AppController {
             engaged = true
         case .automatic:
             // Stay awake while an agent is confirmed working, OR within the grace
-            // tail after work last stopped. Honouring the live signal (not just a
-            // decaying timestamp) means a mid-turn agent is never slept.
-            engaged = liveActive || Date().timeIntervalSince(lastActive) < prefs.gracePeriod
+            // tail after work last stopped. The grace tail applies ONLY while the
+            // lid is open: closing the lid when nothing is actively working means
+            // "I'm done — sleep now", not "bridge my pause". (Closing it while an
+            // agent IS working keeps the Mac awake — that's lid-closed mode's job.)
+            engaged = liveActive
+                || (!lidClosed && Date().timeIntervalSince(lastActive) < prefs.gracePeriod)
         }
 
         // Hold the display awake for the WHOLE engaged window (not just while
         // actively working), so the screen never sleeps/locks mid-task. Forced on
-        // in keepAwake mode regardless of the toggle.
-        let wantDisplay = (prefs.mode == .keepAwake || prefs.keepDisplayAwake) && engaged
+        // in keepAwake mode regardless of the toggle. NEVER with the lid closed:
+        // with `disablesleep` active a display assertion relights the panel
+        // behind the shut lid — useless, battery-hungry, and looks broken.
+        let wantDisplay = (prefs.mode == .keepAwake || prefs.keepDisplayAwake)
+            && engaged && !lidClosed
 
         if ProcessInfo.processInfo.environment["VIGIL_DEBUG"] != nil {
-            NSLog("VIGIL mode=\(prefs.mode.rawValue) agents=\(lastSnapshot.agentCount) hooks=\(lastSnapshot.hookActive) sem=\(lastSnapshot.semanticBusy) heur=\(lastSnapshot.heuristicActive) ticks=\(consecutiveActiveTicks) live=\(liveActive) engaged=\(engaged) display=\(wantDisplay)")
+            NSLog("VIGIL mode=\(prefs.mode.rawValue) lid=\(lidClosed ? "closed" : "open") agents=\(lastSnapshot.agentCount) hooks=\(lastSnapshot.hookActive) sem=\(lastSnapshot.semanticBusy) heur=\(lastSnapshot.heuristicActive) ticks=\(consecutiveActiveTicks) live=\(liveActive) engaged=\(engaged) display=\(wantDisplay)")
         }
         sleep.apply(awake: engaged, keepDisplayAwake: wantDisplay)
 
